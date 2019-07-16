@@ -1,0 +1,312 @@
+---
+title: "Box Jenkins - Aplicación"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+El archivo TMIN contiene los datos acerca de la temperatura mínima diaria registrada en la estación von Humboldt de la UNALM del 01 de abril al 28 de mayo del 2019.
+
+```{r, message = FALSE}
+tmin = ts(read.table("TMIN.txt",T))
+library(ggfortify)
+autoplot(tmin)
+```
+
+# Identificación
+
+## Pruebas de estacionariedad
+
+--------------------------
+# KPSS - Serie original
+--------------------------
+
+H0: Es estacionaria
+H1: No es estacionaria
+
+```{r,message= FALSE}
+library(tseries)
+kpss.test(tmin)
+```
+POR LO TANTO : No es estacionaria
+
+--------------------------
+# Dickey Fuller - Serie original
+--------------------------
+
+H0: No es estacionaria
+H1: Es estacionaria
+
+Usamos el paquete ADF [Dickey-Fuller]
+-------------------------------------
+```{r,message= FALSE}
+adf.test(tmin)
+```
+p-value = 0.1517 > 0.05
+
+POR LO TANTO SE ACEPTA H0 : NO ES ESTACIONARIA
+
+Usamos el paquete URCA [Dickey-Fuller]
+--------------------------------------
+```{r,message= FALSE}
+library(urca)
+summary(ur.df(tmin, type = c("none")))
+```
+p-value: 0.03302 < 0.05
+
+POR LO TANTO SE RECHAZA H0 : ES ESTACIONARIA
+---------------------------------
+# Phillip Perron - Serie original
+---------------------------------
+H0: No es estacionaria
+H1: Es estacionaria
+
+```{r,message= FALSE}
+
+pp.test(tmin,type = c("Z(t_alpha)"))
+PP.test(tmin)  
+pp = ur.pp(tmin, type="Z-tau", model = c("constant")) 
+pp@teststat
+pp@cval
+```
+p-value smaller than printed p-value
+p-value = 0.01
+
+POR LO TANTO SE RECHAZA H1 : ES ESTACIONARIA
+
+----------------------------
+# KPSS - Serie diferenciada
+----------------------------
+H0 : Es estacionaria
+H1 : No es estacionaria
+
+```{r}
+kpss.test(diff(tmin))
+```
+POR LO TANTO SE ACEPTA H1 , NO ES ESTACIONARIA
+
+------------------------------------
+# Dickey Fuller - Serie diferenciada
+------------------------------------
+
+H0 : No es estacionaria
+H1 : Es estacionaria
+
+```{r}
+adf.test(diff(tmin))
+summary(ur.df(diff(tmin), type = c("none")))
+```
+ p-value: 9.046e-14
+ 
+ POR LO TANTO SE RECHAZA H1 => LA SERIES ES ESTACIONARIA
+------------------------------------
+ # Phillip Perron - Serie diferenciada
+------------------------------------
+H0 : No es estacionaria
+H1 : Es estacionaria
+
+```{r}
+pp.test(diff(tmin),type = c("Z(t_alpha)"))
+PP.test(diff(tmin))  
+pp = ur.pp(diff(tmin), type="Z-tau", model = c("constant")) 
+pp@teststat
+pp@cval
+```
+p-value smaller than printed p-value
+p-value = 0.01
+POR LO TANTO NO SE ACEPTA H1 ==> LA SERIE ES ESTACIONARIA
+===============================
+## Análisis de correlogramas
+===============================
+
+```{r,message=FALSE}
+library(ggfortify)
+autoplot(TSA::acf(tmin, type="correlation", plot=FALSE, lag = 21))
+autoplot(TSA::acf(tmin, type="partial", plot=FALSE, lag = 21))
+autoplot(TSA::acf(diff(tmin), type="correlation", plot=FALSE, lag = 21))
+autoplot(TSA::acf(diff(tmin), type="partial", plot=FALSE, lag = 21))
+```
+
+## auto.arima
+
+```{r,message=FALSE}
+library(forecast)
+auto.arima(tmin)
+```
+
+Conclusión de la fase 1: 
+
+Dos modelos tentativos: ARIMA(1,0,0) = AR(1) y ARIMA(0,1,1) = IMA(1,1)
+
+# Modelamiento
+
+```{r}
+modelo1 = Arima(tmin, order = c(1,0,0), include.constant = TRUE)
+summary(modelo1)
+```
+```{r}
+modelo2 = Arima(tmin, order = c(1,0,0), include.constant = FALSE)
+summary(modelo2)
+
+```
+
+
+```{r}
+modelo3 = Arima(tmin, order = c(0,1,1), include.constant = TRUE)
+summary(modelo3)
+```
+
+```{r}
+modelo4 = Arima(tmin, order = c(0,1,1), include.constant = FALSE)
+summary(modelo4)
+```
+
+Escriba por extenso cada uno de estos modelos
+
+# Diagnóstico
+
+```{r}
+# Residuales
+res1 = residuals(modelo1)
+res2 = residuals(modelo2)
+res3 = residuals(modelo3)
+res4 = residuals(modelo4)
+
+# Media cero
+t.test(res1)$p.value
+t.test(res2)$p.value
+t.test(res3)$p.value
+t.test(res4)$p.value
+
+```
+
+====================
+H0: Es normal
+H1: No es normal
+
+```{r}
+# Normalidad
+shapiro.test(res1)$p.value
+shapiro.test(res2)$p.value
+shapiro.test(res3)$p.value
+shapiro.test(res4)$p.value
+```
+como p.valor > 0.05 => No se rechaza H0, por lo tanto tienen una distribucion normal
+
+```{r}
+#x=seq(165,175,by=0.5)
+#d <-dnorm(x,170,12)
+
+d <- rnorm(200)
+plot(d)
+
+shapiro.test(d)
+```
+
+```{r}
+# Independencia
+autoplot(TSA::acf(res1, lag = 28, plot = FALSE)) + 
+  labs(title = "Residuales del modelo 1")
+autoplot(TSA::acf(res2, lag = 28, plot = FALSE))+ 
+  labs(title = "Residuales del modelo 2")
+autoplot(TSA::acf(res3, lag = 28, plot = FALSE))+ 
+  labs(title = "Residuales del modelo 3")
+autoplot(TSA::acf(res4, lag = 28, plot = FALSE))+ 
+  labs(title = "Residuales del modelo 4")
+
+```
+```{r}
+
+# Medidas de precisión
+accuracy(forecast(modelo1))
+accuracy(forecast(modelo2))
+accuracy(forecast(modelo3))
+accuracy(forecast(modelo4))
+
+```
+```{r}
+
+# Significancia
+modelo1$coef/sqrt(diag(modelo1$var.coef))
+modelo2$coef/sqrt(diag(modelo2$var.coef))
+modelo3$coef/sqrt(diag(modelo3$var.coef))
+modelo4$coef/sqrt(diag(modelo4$var.coef))
+
+```
+```{r}
+
+# Validación cruzada
+
+n    = length(tmin)  # longitud de la serie
+k    = 28           # longitud mínima de la data de entrenamiento (k<n)
+ho   = 7            # longitud de la data de prueba (ho<k<n)
+mae1 = mae2 = mae3 = mae4 = matrix(NA,n-k-ho,ho)
+st   = tsp(tmin)[1]  # inicio de la serie
+
+for(i in 1:(n-k-ho)){
+  train   = window(tmin, 
+                   end   = st + k + (i-2))
+  test    = window(tmin, 
+                   start = st + k + (i-1),
+                   end   = st + k + (i-1) + (ho-1))
+
+  modelo1 = Arima(train, order = c(1,0,0), include.constant = TRUE)  
+  predi1  = forecast(modelo1,h = ho)                                        
+  mae1[i,1:length(test)] = abs(ts(predi1$mean)-ts(test))  
+
+  modelo2 = Arima(train, order = c(1,0,0), include.constant = FALSE)  
+  predi2  = forecast(modelo2,h = ho)                                        
+  mae2[i,1:length(test)] = abs(ts(predi2$mean)-ts(test))  
+  
+  modelo3 = Arima(train, order = c(0,1,1), include.constant = TRUE)  
+  predi3  = forecast(modelo3,h = ho)                                        
+  mae3[i,1:length(test)] = abs(ts(predi3$mean)-ts(test))  
+  
+  modelo4 = Arima(train, order = c(0,1,1), include.constant = FALSE)  
+  predi4  = forecast(modelo4,h = ho)                                        
+  mae4[i,1:length(test)] = abs(ts(predi4$mean)-ts(test))}  
+
+plot(1:ho, 
+     colMeans(mae1,na.rm=TRUE), 
+     type = "l", 
+     lwd  = 3,
+     col  = "red", 
+     xlab = "horizonte", 
+     ylab = "MAE",
+     ylim = c(0.8,1.5))
+lines(1:ho, 
+      colMeans(mae2,na.rm=TRUE), 
+      type = "l",
+      lwd  = 3,
+      col  = "darkblue")
+lines(1:ho, 
+      colMeans(mae3,na.rm=TRUE), 
+      type = "l",
+      lwd  = 3,
+      col  = "orange2")
+lines(1:ho, 
+      colMeans(mae4,na.rm=TRUE), 
+      type = "l",
+      lwd  = 3,
+      col  = "springgreen3")
+
+legend("topleft",
+       legend = c("AR(1) con media","AR(1) sin media","IMA(1,1) con drift","IMA(1,1) sin drift"),
+       col    = c("red","darkblue","orange2","springgreen3"),
+       lty    = 1,
+       lwd    = 3)
+
+```
+
+# Predicción
+
+```{r}
+forecast(modelo4, h = 3)
+```
+
+
+```{r}
+autoplot(forecast(modelo4, h=3))
+```

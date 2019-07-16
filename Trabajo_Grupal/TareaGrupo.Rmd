@@ -1,0 +1,321 @@
+---
+title: "Tarea PC2"
+author: "Jaime Gomez, Enrique Figueroa"
+date: "24/06/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Identificacion 
+Se cargan las libs necesarias y se convierten los datos a formato de serie de tiempo.
+
+```{r }
+library(fpp2)
+library(tseries)
+library(urca)
+library(forecast)
+```
+
+
+```{r }
+datos = read.csv("Ingresos_Tributarios.csv",T)
+```
+
+
+```{r }
+(ingtrib = ts(datos[,2], start = c(1994,1), frequency = 4 ) )
+```
+
+Notamos en las graficas ACF, domina la tendencia. En la grafica de lineas hay una tendencia creciente fuerte de ingresos tributarios en los ultimos años...
+
+```{r }
+forecast::ggtsdisplay(ingtrib,lag = 30)
+```
+
+... especialmente en el primer trimestre del año, donde se aprecia que su mediana supera a los otros trimestres.
+
+```{r }
+boxplot(ingtrib ~ cycle(ingtrib), col="gold")
+
+```
+
+## Pruebas de estacionariedad
+
+Realizamos pruebas de estacionariedad
+
+```{r }
+kpss.test(euretail)$p.value
+```
+
+
+```{r }
+adf.test(euretail)$p.value
+```
+
+
+```{r }
+ur.df(euretail)@teststat
+```
+
+```{r }
+pp.test(euretail)$p.value
+```
+
+
+```{r }
+ur.pp(euretail)@teststat
+```
+Todas las pruebas de hipotesis arrojan que la serie de tiempo es no estacionaria.
+
+Diferenciamos una vez para buscar estacionarizarla.
+
+```{r echo=TRUE}
+tseries::kpss.test(diff(ingtrib))$p.value
+```
+No se rechaza la Ho de estacionariedad de la serie.
+
+```{r }
+tseries::adf.test(diff(ingtrib))$p.value 
+```
+Se rechaza la Ho de raiz unitaria, de modo que se acepta Ha de estacionariedad de la serie.
+
+```{r }
+urca::ur.df(diff(ingtrib))@teststat
+```
+Estadistico tau, Abs(-11.2088) es mayor que 3, de modo que se acepta Ha de estacionariedad de la serie.
+
+```{r }
+tseries::pp.test(diff(ingtrib))$p.value 
+```
+El pvalue menor que 0.01 implica aceptar la Ha de estacionariedad de la serie.
+
+```{r }
+urca::ur.pp(diff(ingtrib))@teststat
+```
+
+El estadistico arroja -103.2213, lo que significa que se acepta la Ha de estacionariedad de la serie.
+
+Con una diferenciacion hemos estacionarizado la serie. Veamos los correlogramas, con una diferenciacion.
+
+```{r}
+forecast::ggtsdisplay(diff(ingtrib), lag=90)
+```
+ACF sugiere que las autocorrelaciones se truncan en el segundo desfase, de modo que podemos probar con q=2 o q=1.Entonces p=0. 
+
+Por otro lado, la sautocorrelaciones cada cuatro puntos se truncan en dos desfases, de modo que podemos probar con q=2 y q=1.
+
+Es decir, podemos tentar los modelos:
+
+ARIMA(0,1,1)(0,1,1)
+
+ARIMA(0,1,1)(0,1,2)
+
+ARIMA(0,1,2)(0,1,1)
+
+ARIMA(0,1,2)(0,1,2)
+
+Veamos lo que sugiere auto.arima, con una diferenciacion.
+
+```{r}
+forecast::auto.arima(y = ingtrib, d = 1)
+```
+
+Como se puede observar auto.arima sugiere ARIMA(0,1,1)(0,1,2)
+
+## Modelamiento
+
+```{r}
+
+mod_1 = Arima(y = ingtrib, order = c(0,1,1), seasonal = c(0,1,1))
+summary(mod_1)
+```
+
+
+```{r}
+mod_2 = Arima(y = ingtrib, order = c(0,1,1), seasonal = c(0,1,2))
+summary(mod_2)
+```
+
+
+```{r}
+mod_3 = Arima(y = ingtrib, order = c(0,1,2), seasonal = c(0,1,1))
+summary(mod_3)
+```
+
+
+```{r}
+mod_4 = Arima(y = ingtrib, order = c(0,1,2), seasonal = c(0,1,2))
+summary(mod_4)
+```
+
+## Diagnostico 
+
+Una vez que tenemos varios modelos tentativos, realizamos pruebas de diagnostico.
+
+```{r}
+res1 = residuals(mod_1)
+res2 = residuals(mod_2)
+res3 = residuals(mod_3)
+res4 = residuals(mod_4)
+
+ggtsdisplay(res1)
+```
+
+El modelo 1 muestra un buen comportamiento de residuales: no hay autocorrelaciones fuera de las bandas. 
+```{r}
+
+ggtsdisplay(res2)
+```
+
+El modelo 2 tambien tiene un aceptable comportamiento de residuales, pues salvo una de las autocorrelaciones, todas estan dentro de las bandas.
+```{r}
+ggtsdisplay(res3)
+
+```
+El modelo 3 tambien exhibe un buen comportamiento de residuales: no hay autocorrelaciones fuera de las bandas.
+
+```{r}
+ggtsdisplay(res4)
+
+```
+El modelo 3 tambien exhibe un buen comportamiento de residuales: salvo una autocorrelacion en ACF no hay autocorrelaciones fuera de las bandas.
+
+
+```{r}
+t.test(res1)$p.value
+t.test(res2)$p.value
+t.test(res3)$p.value
+t.test(res4)$p.value
+
+```
+
+Todas los residuales dan resultados satisfactorios respecto a que la media de los residuales de los modelos son
+significativamente cero, toda vez que los pvalues no rechazan la Ho de media = 0.
+
+```{r}
+shapiro.test(res1)$p.value
+shapiro.test(res2)$p.value
+shapiro.test(res3)$p.value
+shapiro.test(res4)$p.value
+
+```
+
+El test de normalidad de residuales, sin embargo, muestra que ninguno de los modelos prueba estadisticamente al 10% de significancia que los residuales siguen una distribucion normal. Todavia deben hacerse esfuerzos para mejorar los ajustes de los modelos, por ejemplo, incorporando media o drift, para superar este escollo, toda vez que los pronosticos que se hagan con ellos no seran del todo confiables.
+
+Por otro lado, procedemos a emitir indicadores de exactitud de pronosticos:
+
+```{r}
+accuracy(forecast(mod_1))
+```
+
+
+```{r}
+accuracy(forecast(mod_2))
+```
+
+
+```{r}
+accuracy(forecast(mod_3))
+```
+
+
+```{r}
+accuracy(forecast(mod_4))
+
+```
+
+Segun lo anterior, el modelo 3 logra mejor performance en 3 medidas de exactitud (MAE, MAPE y MASE).
+
+## Cross Validation
+
+Realizamos una prueb de cross validacion para probar los modelos con datos distintos de los que sirvieron para
+construir los modelos.
+
+```{r}
+
+n    = length(euretail)  # longitud de la serie
+k    = 28                # longitud m?nima de la data de entrenamiento (k<n)
+ho   = 4                 # longitud de la data de prueba (ho<k<n)
+mse1 = mse2 = mse3 = mse4 =  matrix(NA,n-k-ho,ho)
+st   = tsp(euretail)[1]  # inicio de la serie
+
+for(i in 1:(n-k-ho)){
+  train   = window(ingtrib, 
+                   end   = st + k/4 + (i-2)/4)
+  test    = window(ingtrib, 
+                   start = st + k/4 + (i-1)/4,
+                   end   = st + k/4 + (i-1)/4 + (ho-1)/4)
+  
+  modelo1 = Arima(train, order = c(0,1,1), seasonal = c(0,1,1))  
+  predi1  = forecast(modelo1,h = ho)                                        
+  mse1[i,1:length(test)] = (ts(predi1$mean)-ts(test))^2  
+  
+  modelo2 = Arima(train, order = c(0,1,1), seasonal = c(0,1,2))  
+  predi2  = forecast(modelo2,h = ho)                                        
+  mse2[i,1:length(test)] = (ts(predi2$mean)-ts(test))^2
+  
+  modelo3 = Arima(train, order = c(0,1,2), seasonal = c(0,1,1))  
+  predi3  = forecast(modelo3,h = ho)                                        
+  mse3[i,1:length(test)] = (ts(predi3$mean)-ts(test))^2  
+
+  modelo4 = Arima(train, order = c(0,1,2), seasonal = c(0,1,2))  
+  predi4  = forecast(modelo4,h = ho)                                        
+  mse4[i,1:length(test)] = (ts(predi4$mean)-ts(test))^2  
+  
+  }  
+
+```
+
+
+```{r}
+plot(1:ho, 
+     colMeans(sqrt(mse1),na.rm=TRUE), 
+     type = "l", 
+     lwd  = 2,
+     col  = "red", 
+     xlab = "horizonte", 
+     ylab = "RMSE",
+     ylim = c(0.21,0.35))
+lines(1:ho, 
+      colMeans(sqrt(mse2),na.rm=TRUE), 
+      type = "l",
+      lwd  = 2,
+      col  = "darkblue")
+lines(1:ho, 
+      colMeans(sqrt(mse3),na.rm=TRUE), 
+      type = "l",
+      lwd  = 2,
+      col  = "springgreen3")
+lines(1:ho, 
+      colMeans(sqrt(mse4),na.rm=TRUE), 
+      type = "l",
+      lwd  = 2,
+      col  = "springgreen4")
+legend("topleft",
+       legend = c("ARIMA(0,1,1)(0,1,1)[4]","ARIMA(0,1,1)(0,1,2)[4]","ARIMA(0,1,2)(0,1,1)[4]","ARIMA(0,1,2)(0,1,2)[4]"),
+       col    = c("red","darkblue","springgreen3","springgreen4"),
+       lty    = 1,
+       lwd    = 2)
+
+```
+
+La grafica de la prueba de cross validation no permite dar un veredicto concluyente, como se puede apreciar en el grafifo de arriba.
+
+## Prediccion 
+
+Basandonos en que el modelo 3 obtuvo mejores resultados con 3 indicadores de exactitud, realizamos una prediccion con dicho moledol, aun teniendo en cuuenta que la no normalidad de residuales no permite realizar predicciones confiables estadisticamente.
+
+```{r}
+
+forecast(mod_3, h = 4)
+
+```
+
+Graficamente:
+
+```{r}
+autoplot(forecast(mod_3, h = 4))
+```

@@ -1,0 +1,298 @@
+---
+title: "Box Jenkins"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Lectura de datos
+
+```{r}
+data1 = read.table("validaciones.txt",T)
+st1   = ts(data1/10^6, start = c(2016,8), freq = 12)
+```
+
+# Operador diferenciación 
+
+```{r}
+st1
+
+diff(st1) 
+
+diff(diff(st1)) 
+
+diff(st1, differences = 2)
+```
+
+# Pruebas de estacionariedad
+
+## KPSS
+```{r, message=F}
+
+library(ggfortify)
+library(tseries)
+
+x = rnorm(100)
+kpss.test(x,null="Level")
+kpss.test(x,null="Trend")
+#for(i in 1:100){print(kpss.test(rnorm(1000),null="Level")$p.value)}
+```
+
+```{r, message=F}
+
+z = 1:24
+x = NULL
+for(i in 1:24){x[i] = 2*z[i]+rnorm(1,0,4)}
+autoplot(ts(x))
+summary(lm(x~z))
+kpss.test(x,null="Level")
+kpss.test(x,null="Trend")
+```
+
+```{r, message=F}
+
+x = c(1,3,9,14,24,30,50,100,250,700)
+autoplot(ts(x))
+kpss.test(x,null="Level")
+kpss.test(x,null="Trend")
+```
+```{r, message=F}
+x = c(1,3,9,14,24,30,50,40,45,44,38,35,41,37)
+autoplot(ts(x))
+kpss.test(x,null="Level")
+kpss.test(x,null="Trend")
+
+```
+
+## ADF
+
+```{r}
+x = rnorm(100)
+adf.test(x, alternative = c("stationary"))
+adf.test(x, alternative = c("explosive"))
+```
+```{r}
+trunc((length(x)-1)^(1/3))
+adf.test(x, alternative = c("stationary"),k=0) # Dickey Fuller
+adf.test(x, alternative = c("stationary"),k=1)
+adf.test(x, alternative = c("stationary"),k=2)
+adf.test(x, alternative = c("stationary"),k=3)
+adf.test(x, alternative = c("stationary"),k=4)
+```
+```{r}
+
+library(urca)
+# H0: Existe raíz unitaria
+summary(ur.df(x, type = c("none"), lags= 0)) # media cero sin tendencia
+
+```
+```{r}
+# H0: Existe raíz unitaria
+# H0: Existe raíz unitaria sin intercepto
+summary(ur.df(x, type = c("drift"), lags= 0)) # media dif cero sin tendencia
+```
+```{r}
+# H0: Existe raíz unitaria
+# H0: Existe raíz unitaria sin tendencia
+# H0: Existe raíz unitaria sin tendencia ni intercepto
+summary(ur.df(x, type = c("trend"), lags= 0)) # media dif cero con tendencia
+```
+```{r}
+summary(ur.df(x, type = c("trend"), lags= 4)) # media dif cero con tendencia
+```
+```{r}
+z = 1:30
+x = NULL
+for(i in 1:30){x[i] = 2*z[i]+rnorm(1,0,4)}
+adf.test(x, alternative = c("stationary"))
+adf.test(x, alternative = c("explosive"))
+```
+```{r}
+trunc((length(x)-1)^(1/3))
+adf.test(x, alternative = c("stationary"),k=0)
+adf.test(x, alternative = c("stationary"),k=1)
+adf.test(x, alternative = c("stationary"),k=2)
+adf.test(x, alternative = c("stationary"),k=3)
+adf.test(x, alternative = c("stationary"),k=4)
+```
+```{r}
+summary(ur.df(x, type = c("none"), lags= 0)) # media cero sin tendencia 
+summary(ur.df(x, type = c("drift"), lags= 0)) # media dif cero sin tendencia
+summary(ur.df(x, type = c("trend"), lags= 0)) # media dif cero con tendencia
+summary(ur.df(x, type = c("trend"), lags= 4)) # media dif cero con tendencia
+```
+
+# Simulación de modelo AR(1)
+
+$$Y_t = 0.85Y_{t-1} + \epsilon_t\qquad\qquad\epsilon_t\sim N(0,4)$$
+
+```{r, message = FALSE}
+library(TSA)
+library(ggfortify)
+set.seed(616)
+
+phi    = 0.85
+sigma  = sqrt(4)
+
+Y.AR1 = arima.sim(model=list(ar=c(phi)), n=150, sd = sigma)   # AR(1) con phi = 0.85
+autoplot(Y.AR1) + geom_hline(yintercept = 0)
+```
+
+¿La serie es estacionaria?
+
+```{r,message=FALSE}
+library(tseries)
+kpss.test(Y.AR1, null="Level") # Prueba KPSS (Kwiatkowski–Phillips–Schmidt–Shin) de estacionariedad 
+adf.test(Y.AR1, k = 0)  # Prueba Dickey-Fuller de raíz unitaria
+adf.test(Y.AR1, k = 1)  # Prueba Dickey-Fuller Aumentada de raíz unitaria
+adf.test(Y.AR1, k = 4)  # Prueba Dickey-Fuller Aumentada de raíz unitaria
+```
+```{r,message=FALSE}
+summary(ur.df(Y.AR1, type = c("trend"), lags= 0)) # Prueba Dickey-Fuller de raíz unitaria
+```
+```{r,message=FALSE}
+summary(ur.df(Y.AR1, type = c("trend"), lags= 1)) # Prueba Dickey-Fuller Aumentada de raíz unitaria
+```
+```{r,message=FALSE}
+summary(ur.df(Y.AR1, type = c("trend"), lags= 4)) # Prueba Dickey-Fuller Aumentada de raíz unitaria
+```
+```{r,message=FALSE}
+PP.test(Y.AR1)   # Prueba Phillips-Perron de raíces unitarias 
+pp.test(Y.AR1)   # Prueba Phillips-Perron de raíces unitarias 
+```
+
+Se puede también constatar teóricamente, verificando a través del polinomio característico (autorregresivo):
+
+$$Y_t = 0.85Y_{t-1}+\epsilon_t$$
+
+$$Y_t = 0.85BY_t+\epsilon_t$$
+$$Y_t(1-0.85B) = \epsilon_t$$
+$$1-0.85B=0\rightarrow B=1.176>1$$
+Por lo tanto no tiene raíces unitarias $\rightarrow$ la serie es estacionaria.
+
+Con  respecto a la invertibilidad:
+
+$$Y_t = 0.85Y_{t-1}+\epsilon_t$$
+
+$$Y_t = 0.85(0.85Y_{t-2}+\epsilon_{t-1})+\epsilon_t$$
+
+$$Y_t = 0.85(0.85(0.85Y_{t-3}+\epsilon_{t-2})+\epsilon_{t-1})+\epsilon_t$$
+$$Y_t = 0.85(0.85(0.85(0.85Y_{t-4}+\epsilon_{t-3})+\epsilon_{t-2})+\epsilon_{t-1})+\epsilon_t$$
+
+
+$$Y_t = 0.522Y_{t-4} + 0.614\epsilon_{t-3}+0.7225\epsilon_{t-2}+0.85\epsilon_{t-1}+\epsilon_t$$
+Continúe desdoblando, de tal modo que el primer término $Y$ al lado derecho del símbolo $=$ tenderá a cero y $Y_t$ quedará expresado como una suma de ruidos blancos, lo que vendría a ser un Modelo de Medias Móviles (MA), que será estudiando en la siguiente sección.
+
+Teóricamente sabemos que la media es cero, pero ¿cuál es la media muestral de la serie?
+
+```{r}
+mean(Y.AR1)
+```
+
+¿Cuál es el valor de la varianza teórica?¿y de la muestral?
+
+```{r}
+sigma^2/(1-phi^2) # teórica
+var(Y.AR1)       # muestral
+```
+
+Función de autocovarianza
+
+```{r}
+TSA::acf(Y.AR1, type="covariance", lag = 10, plot = FALSE)
+TSA::acf(Y.AR1, type="covariance", lag = 100, plot = TRUE, main = "Función de autocovarianza")
+```
+
+
+La función de autocorrelación decae lentamente (se extingue):
+
+```{r}
+TSA::acf(Y.AR1, type="correlation", lag = 10, plot = FALSE)
+TSA::acf(Y.AR1, type="correlation", lag = 100, plot = TRUE, main = "Función de autocorrelación")
+```
+
+La función de autocorrelación parcial teórica es significativamente distinta de cero solo para el orden 1, mientras que la muestral:
+
+```{r}
+TSA::acf(Y.AR1, type="partial", lag = 10, plot = FALSE)
+TSA::acf(Y.AR1, type="partial", lag = 100, plot = TRUE, main = "Función de autocorrelación parcial")
+```
+
+La relación entre la autocorrelación parcial y un modelo (auto)regresivo
+
+```{r}
+lm(Y.AR1~zlag(Y.AR1))
+```
+
+
+
+# Simulación de modelo AR(2)
+
+$$Y_t = 0.55Y_{t-1} + 0.41Y_{t-2} + \epsilon_t\qquad\qquad\epsilon_t\sim N(0,2)$$
+
+
+```{r, message = FALSE}
+set.seed(6529)
+
+phi1  = 0.55
+phi2  = 0.41
+sigma  = sqrt(2)
+
+Y.AR2 = arima.sim(model=list(ar=c(phi1,phi2)), n=150, sd = sigma)   # AR(2) con phi1 = 0.55 y phi2 = 0.41
+autoplot(Y.AR2) + geom_hline(yintercept = 0)
+```
+
+¿La serie es estacionaria?
+
+```{r,message=FALSE}
+library(tseries)
+kpss.test(Y.AR2, null = "Level") # Prueba KPSS (Kwiatkowski–Phillips–Schmidt–Shin) de estacionariedad 
+adf.test(Y.AR2, k = 0)  # Prueba Dickey-Fuller de raíz unitaria
+adf.test(Y.AR2, k = 1)  # Prueba Dickey-Fuller Aumentada de raíz unitaria
+adf.test(Y.AR2, k = 4)  # Prueba Dickey-Fuller Aumentada de raíz unitaria
+summary(ur.df(Y.AR2, type = c("trend"), lags= 0)) # Prueba Dickey-Fuller de raíz unitaria
+summary(ur.df(Y.AR2, type = c("trend"), lags= 1)) # Prueba Dickey-Fuller Aumentada de raíz unitaria
+summary(ur.df(Y.AR2, type = c("trend"), lags= 4)) # Prueba Dickey-Fuller Aumentada de raíz unitaria
+```
+
+Media
+
+```{r}
+mean(Y.AR2)
+```
+
+Varianza
+
+```{r}
+sigma^2/(1-phi1-phi2) # teórica
+var(Y.AR2) # muestral
+```
+
+Función de autocovarianza
+
+```{r}
+TSA::acf(Y.AR2, type="covariance", lag = 10, plot = FALSE)
+TSA::acf(Y.AR2, type="covariance", lag = 100, plot = TRUE, main = "Función de autocovarianza")
+```
+
+La función de autocorrelación decae lentamente (se extingue):
+
+```{r}
+TSA::acf(Y.AR2, type="correlation", lag = 10, plot = FALSE)
+TSA::acf(Y.AR2, type="correlation", lag = 100, plot = TRUE, main = "Función de autocorrelación")
+```
+
+La función de autocorrelación parcial teórica es significativamente distinta de cero solo para el orden 1, mientras que la muestral:
+
+```{r}
+TSA::acf(Y.AR2, type="partial", lag = 10, plot = FALSE)
+TSA::acf(Y.AR2, type="partial", lag = 100, plot = TRUE, main = "Función de autocorrelación parcial")
+```
+
+La relación entre la autocorrelación parcial y un modelo (auto)regresivo
+
+```{r}
+lm(Y.AR2~zlag(Y.AR2, d=2))
+```

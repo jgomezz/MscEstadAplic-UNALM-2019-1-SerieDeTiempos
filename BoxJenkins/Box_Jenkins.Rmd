@@ -1,0 +1,65 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+data1 = read.table("validaciones.txt",T)
+st1   = ts(data1/10^6, start = c(2016,8), freq = 12)
+st1
+```
+
+
+```{r}
+# La funcion lag es el operador retardo
+lag(st1)
+```
+
+
+```{r}
+# Si no se dice nada es la diferenciacion simple. Se 
+# pierde un valor
+diff(st1)
+```
+
+```{r}
+library(ggfortify)
+autoplot(st1)
+```
+```{r}
+diff(diff(st1)) 
+
+```
+
+```{r}
+# Esto similar a diff(diff(st1)) 
+diff(st1, differences = 2)
+
+```
+```{r}
+# Diferencia la seria con un retardo de orden 12. Se usa para eliminar estacionalidad
+diff(st1, lag=12)
+```
+
+```{r}
+# Diferencia la seria con un retardo de orden 12. Se usa para eliminar estacionalidad
+diff(st1, lag=12, differences = 2)
+```
+```{r}
+library(ggfortify)
+library(tseries)
+
+```
+
+```{r}
+x = rnorm(100)
+
+#shapiro.test(x)
+
+# null="Level" : Hipotesis nula
+# si no se pone nada asume es media
+kpss.test(x,null="Level")
+
+```
+

@@ -1,0 +1,714 @@
+---
+title: "Box Jenkins"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Conceptos generales
+
+```{r}
+
+# ---------------- #
+# Lectura de datos #
+# ---------------- #
+
+data1 = read.table("validaciones.txt",T)
+st1   = ts(data1/10^6, start = c(2016,8), freq = 12)
+
+# ----------------------- #
+# Operador diferenciación #
+# ----------------------- #
+
+st1
+
+diff(st1) 
+
+diff(diff(st1)) 
+
+diff(st1, differences = 2)
+```
+
+```{r, message=F}
+
+# -------------------------- #
+# Pruebas de estacionariedad # 
+# -------------------------- #
+
+# .... #
+# KPSS #
+# .... #
+
+library(ggfortify)
+library(tseries)
+
+x = rnorm(100)
+kpss.test(x,null="Level")
+kpss.test(x,null="Trend")
+#for(i in 1:100){print(kpss.test(rnorm(1000),null="Level")$p.value)}
+
+z = 1:24
+x = NULL
+for(i in 1:24){x[i] = 2*z[i]+rnorm(1,0,4)}
+autoplot(ts(x))
+summary(lm(x~z))
+kpss.test(x,null="Level")
+kpss.test(x,null="Trend")
+
+x = c(1,3,9,14,24,30,50,100,250,700)
+autoplot(ts(x))
+kpss.test(x,null="Level")
+kpss.test(x,null="Trend")
+
+x = c(1,3,9,14,24,30,50,40,45,44,38,35,41,37)
+autoplot(ts(x))
+kpss.test(x,null="Level")
+kpss.test(x,null="Trend")
+
+# ... #
+# ADF #
+# ... #
+
+x = rnorm(100)
+adf.test(x, alternative = c("stationary"))
+adf.test(x, alternative = c("explosive"))
+trunc((length(x)-1)^(1/3))
+adf.test(x, alternative = c("stationary"),k=0) # Dickey Fuller
+adf.test(x, alternative = c("stationary"),k=1)
+adf.test(x, alternative = c("stationary"),k=2)
+adf.test(x, alternative = c("stationary"),k=3)
+adf.test(x, alternative = c("stationary"),k=4)
+
+library(urca)
+# H0: Existe raíz unitaria
+summary(ur.df(x, type = c("none"), lags= 0)) # media cero sin tendencia
+
+# H0: Existe raíz unitaria
+# H0: Existe raíz unitaria sin intercepto
+summary(ur.df(x, type = c("drift"), lags= 0)) # media dif cero sin tendencia
+
+# H0: Existe raíz unitaria
+# H0: Existe raíz unitaria sin tendencia
+# H0: Existe raíz unitaria sin tendencia ni intercepto
+summary(ur.df(x, type = c("trend"), lags= 0)) # media dif cero con tendencia
+summary(ur.df(x, type = c("trend"), lags= 4)) # media dif cero con tendencia
+
+z = 1:30
+x = NULL
+for(i in 1:30){x[i] = 2*z[i]+rnorm(1,0,4)}
+adf.test(x, alternative = c("stationary"))
+adf.test(x, alternative = c("explosive"))
+trunc((length(x)-1)^(1/3))
+adf.test(x, alternative = c("stationary"),k=0)
+adf.test(x, alternative = c("stationary"),k=1)
+adf.test(x, alternative = c("stationary"),k=2)
+adf.test(x, alternative = c("stationary"),k=3)
+adf.test(x, alternative = c("stationary"),k=4)
+
+summary(ur.df(x, type = c("none"), lags= 0)) # media cero sin tendencia 
+summary(ur.df(x, type = c("drift"), lags= 0)) # media dif cero sin tendencia
+summary(ur.df(x, type = c("trend"), lags= 0)) # media dif cero con tendencia
+summary(ur.df(x, type = c("trend"), lags= 4)) # media dif cero con tendencia
+
+# .. #
+# PP #
+# .. #
+
+x = rnorm(100)
+pp.test(x,type = c("Z(t_alpha)"))
+PP.test(x)
+pp1 = ur.pp(x, type="Z-tau", model = c("constant")) # serie con media constante
+pp1
+pp1@teststat
+pp1@cval
+pp2 = ur.pp(x, type="Z-tau", model = c("trend")) # serie con tendencia, prueba tendencia estacionaria, no adecuado en este caso
+pp2
+pp2@teststat
+pp2@cval
+
+z = 1:30
+x = NULL
+for(i in 1:30){x[i] = 2*z[i]+rnorm(1,0,4)}
+pp.test(x,type = c("Z(t_alpha)"))
+PP.test(x)
+pp1 = ur.pp(x, type="Z-tau", model = c("constant")) # serie con media constante
+pp1
+pp1@teststat
+pp1@cval
+pp2 = ur.pp(x, type="Z-tau", model = c("trend")) # serie con tendencia
+pp2
+pp2@teststat
+pp2@cval
+
+z = 1:10
+x = NULL
+for(i in 1:10){x[i] = 2*z[i]+rnorm(1,0,4)}
+pp.test(x,type = c("Z(t_alpha)"))
+PP.test(x)
+pp1 = ur.pp(x, type="Z-tau", model = c("constant")) # serie con media constante
+pp1
+pp1@teststat
+pp1@cval
+pp2 = ur.pp(x, type="Z-tau", model = c("trend")) # serie con tendencia
+pp2
+pp2@teststat
+pp2@cval
+
+x = c(1,3,9,14,24,30,50,40,45,44,38,35,41,37)
+pp.test(x,type = c("Z(t_alpha)"))
+PP.test(x)
+pp1 = ur.pp(x, type="Z-tau", model = c("constant")) # serie con media constante
+pp1
+pp1@teststat
+pp1@cval
+pp2 = ur.pp(x, type="Z-tau", model = c("trend")) # serie con tendencia
+pp2
+pp2@teststat
+pp2@cval
+
+```
+
+# Modelo AR(1)
+
+$$Y_t = 0.85Y_{t-1} + \epsilon_t\qquad\qquad\epsilon_t\sim N(0,4)$$
+
+```{r, message = FALSE}
+
+# --------------------------- #
+# Simulación del modelo AR(1) #
+# --------------------------- #
+
+library(TSA)
+library(ggfortify)
+set.seed(616)
+
+phi    = 0.85
+sigma  = sqrt(4)
+
+set.seed(78)
+Y.AR1 = arima.sim(model=list(ar=c(phi)), n=150, sd = sigma)   # AR(1) con phi = 0.85
+autoplot(Y.AR1, type="l") + 
+  geom_hline(yintercept = 0)
+
+# -------------------------- #
+# Pruebas de estacionariedad #
+# -------------------------- #
+
+library(tseries)
+kpss.test(Y.AR1, null="Level") 
+kpss.test(Y.AR1)
+
+adf.test(Y.AR1, k = 0)  
+adf.test(Y.AR1, k = 1)
+trunc((length(Y.AR1)-1)^(1/3))
+adf.test(Y.AR1, k = 5)  
+adf.test(Y.AR1)  
+
+summary(ur.df(Y.AR1, type = c("none"), lags= 0)) 
+summary(ur.df(Y.AR1, type = c("none"), lags= 1))  
+summary(ur.df(Y.AR1, type = c("none")))
+
+pp.test(Y.AR1,type = c("Z(t_alpha)"))
+PP.test(Y.AR1)  
+
+pp = ur.pp(Y.AR1, type="Z-tau", model = c("constant")) 
+pp
+pp@teststat
+pp@cval
+```
+
+Se puede también constatar teóricamente, verificando a través del polinomio característico (autorregresivo):
+
+$$Y_t = 0.85Y_{t-1}+\epsilon_t$$
+
+$$Y_t = 0.85BY_t+\epsilon_t$$
+$$Y_t(1-0.85B) = \epsilon_t$$
+$$1-0.85B=0\rightarrow B=1.176>1$$
+Por lo tanto, la raíz no es unitaria $\rightarrow$ la serie es estacionaria.
+
+Con  respecto a la invertibilidad:
+
+$$Y_t = 0.85Y_{t-1}+\epsilon_t$$
+
+$$Y_t = 0.85(0.85Y_{t-2}+\epsilon_{t-1})+\epsilon_t$$
+
+$$Y_t = 0.85(0.85(0.85Y_{t-3}+\epsilon_{t-2})+\epsilon_{t-1})+\epsilon_t$$
+$$Y_t = 0.85(0.85(0.85(0.85Y_{t-4}+\epsilon_{t-3})+\epsilon_{t-2})+\epsilon_{t-1})+\epsilon_t$$
+
+
+$$Y_t = 0.522Y_{t-4} + 0.614\epsilon_{t-3}+0.7225\epsilon_{t-2}+0.85\epsilon_{t-1}+\epsilon_t$$
+Continúe desdoblando, de tal modo que el primer término $Y$ al lado derecho del símbolo $=$ tenderá a cero y $Y_t$ quedará expresado como una suma de ruidos blancos, lo que vendría a ser un Modelo de Medias Móviles (MA), que será estudiando en la siguiente sección.
+
+Teóricamente sabemos que la media es cero, pero ¿cuál es la media muestral de la serie?
+
+```{r}
+mean(Y.AR1)
+```
+
+¿Cuál es el valor de la varianza teórica?, ¿y de la muestral?
+
+```{r}
+sigma^2/(1-phi^2) # teórica
+var(Y.AR1)        # muestral
+```
+
+Función de autocovarianza
+
+```{r}
+TSA::acf(Y.AR1, type="covariance", lag = 10, plot = FALSE)
+TSA::acf(Y.AR1, type="covariance", lag = 100, plot = TRUE, main = "Función de autocovarianza")
+```
+
+La función de autocorrelación teórica decae lentamente (se extingue), lo cual se evidencia en los resultados muestrales:
+
+```{r}
+TSA::acf(Y.AR1, type="correlation", lag = 10, plot = FALSE)
+TSA::acf(Y.AR1, type="correlation", lag = 100, plot = TRUE, main = "Función de autocorrelación")
+```
+
+La función de autocorrelación parcial teórica es significativamente distinta de cero solo para el orden 1, lo cual se evidencia también en la muestral:
+
+```{r}
+TSA::acf(Y.AR1, type="partial", lag = 10, plot = FALSE)
+TSA::acf(Y.AR1, type="partial", lag = 100, plot = TRUE, main = "Función de autocorrelación parcial")
+```
+
+La relación entre la autocorrelación parcial y un modelo (auto)regresivo
+
+```{r}
+lm(Y.AR1~zlag(Y.AR1))
+```
+
+¿Qué modelo sugiere R?
+
+```{r, message=FALSE}
+library(forecast)
+auto.arima(Y.AR1)
+```
+
+Modelando un AR(1)
+
+```{r}
+modelo1 = Arima(Y.AR1, order = c(1,0,0));
+coef(modelo1);
+summary(modelo1)
+```
+```{r}
+modelo1 = Arima(Y.AR1, order = c(1,0,0),include.mean = TRUE); 
+coef(modelo1);
+summary(modelo1)
+```
+```{r}
+modelo1 = Arima(Y.AR1, order = c(1,0,0),include.mean = FALSE); 
+coef(modelo1);
+summary(modelo1)
+```
+
+Un nuevo modelo AR(1)
+
+```{r}
+set.seed(78)
+y.AR1 = 25 + arima.sim(model=list(ar=c(phi)), n=150, sd = sigma)   # AR(1) con phi = 0.85
+autoplot(y.AR1) + 
+  geom_hline(yintercept = 25)
+```
+```{r}
+auto.arima(y.AR1) # automáticamente busca un modelo con media distinta de cero (incluye constante)
+```
+```{r}
+modelo1 = Arima(y.AR1, order = c(1,0,0)); coef(modelo1);summary(modelo1)
+```
+
+
+```{r}
+modelo1 = Arima(y.AR1, order = c(1,0,0),include.constant = TRUE); coef(modelo1);summary(modelo1)
+```
+```{r}
+modelo1 = Arima(y.AR1, order = c(1,0,0),include.mean = TRUE); coef(modelo1);summary(modelo1)
+```
+```{r}
+modelo1 = Arima(y.AR1, order = c(1,0,0),include.constant = FALSE); coef(modelo1);summary(modelo1)
+```
+```{r}
+modelo1 = Arima(y.AR1, order = c(1,0,0),include.mean = FALSE); coef(modelo1);summary(modelo1)
+```
+
+# Modelo AR(2)
+
+$$Y_t = 0.55Y_{t-1} - 0.44Y_{t-2} + \epsilon_t\qquad\qquad\epsilon_t\sim N(0,2)$$
+
+
+```{r, message = FALSE}
+# --------------------------- #
+# Simulación del modelo AR(2) #
+# --------------------------- #
+
+set.seed(122)
+
+phi1  = 0.58
+phi2  = -0.44
+sigma  = sqrt(2)
+
+Y.AR2 = arima.sim(model=list(ar=c(phi1,phi2)), n=150, sd = sigma)   # AR(2) con phi1 = 0.58 y phi2 = -0.44
+autoplot(Y.AR2) + 
+  geom_hline(yintercept = 0)
+```
+
+
+```{r, message = FALSE}
+# -------------------------- #
+# Pruebas de estacionariedad #
+# -------------------------- #
+
+library(tseries)
+kpss.test(Y.AR2, null="Level") 
+kpss.test(Y.AR2)
+```
+
+
+```{r, message = FALSE}
+adf.test(Y.AR2, k = 0)  
+adf.test(Y.AR2, k = 1)
+```
+
+```{r, message = FALSE}
+trunc((length(Y.AR2)-1)^(1/3))
+```
+
+```{r, message = FALSE}
+adf.test(Y.AR2, k = 5)  
+adf.test(Y.AR2)
+```
+
+
+```{r, message = FALSE}
+summary(ur.df(Y.AR2, type = c("none"), lags= 0))
+```
+
+```{r, message = FALSE}
+summary(ur.df(Y.AR2, type = c("none"), lags= 1))
+```
+
+```{r, message = FALSE}
+summary(ur.df(Y.AR2, type = c("none")))
+```
+
+```{r, message = FALSE}
+pp.test(Y.AR2,type = c("Z(t_alpha)"))
+PP.test(Y.AR2)
+```
+
+```{r, message = FALSE}
+pp = ur.pp(Y.AR2, type="Z-tau", model = c("constant")) 
+pp
+pp@teststat
+pp@cval
+
+```
+
+Media
+
+```{r}
+mean(Y.AR2)
+```
+
+Varianza
+
+```{r}
+sigma^2/(1-phi1-phi2) # teórica
+var(Y.AR2) # muestral
+```
+
+Función de autocovarianza
+
+```{r}
+TSA::acf(Y.AR2, type="covariance", lag = 10, plot = FALSE)
+TSA::acf(Y.AR2, type="covariance", lag = 100, plot = TRUE, main = "Función de autocovarianza")
+```
+
+La función de autocorrelación decae lentamente (se extingue):
+
+```{r}
+TSA::acf(Y.AR2, type="correlation", lag = 10, plot = FALSE)
+TSA::acf(Y.AR2, type="correlation", lag = 100, plot = TRUE, main = "Función de autocorrelación")
+```
+
+La función de autocorrelación parcial teórica es significativamente distinta de cero para los desfases 1 y 2, mientras que la muestral:
+
+```{r}
+TSA::acf(Y.AR2, type="partial", lag = 10, plot = FALSE)
+TSA::acf(Y.AR2, type="partial", lag = 100, plot = TRUE, main = "Función de autocorrelación parcial")
+```
+
+La relación entre la autocorrelación parcial y un modelo (auto)regresivo
+
+```{r}
+lm(Y.AR2~zlag(Y.AR2, d=1)+zlag(Y.AR2, d=2))
+```
+
+¿Qué modelo sugiere R?
+
+```{r}
+auto.arima(Y.AR2)
+```
+
+Modelando un AR(2)
+
+```{r}
+modelo2 = arima(Y.AR2, order = c(2,0,0));coef(modelo2);summary(modelo2)
+```
+```{r}
+modelo2 = arima(Y.AR2, order = c(2,0,0),include.mean = TRUE);coef(modelo2);summary(modelo2)
+```
+```{r}
+modelo2 = arima(Y.AR2, order = c(2,0,0),include.mean = FALSE);coef(modelo2);summary(modelo2)
+```
+
+```{r}
+modelo2 = Arima(Y.AR2, order = c(2,0,0));coef(modelo2);summary(modelo2)
+```
+```{r}
+modelo2 = Arima(Y.AR2, order = c(2,0,0),include.mean = TRUE);coef(modelo2);summary(modelo2)
+```
+
+```{r}
+modelo2 = Arima(Y.AR2, order = c(2,0,0),include.mean = FALSE);coef(modelo2);summary(modelo2)
+
+```
+
+Un nuevo modelo AR(2)
+
+```{r}
+set.seed(78)
+y.AR2 = 33 + arima.sim(model=list(ar=c(0.8,-0.4)), n=150, sd = sigma)   # AR(1) con phi = 0.85
+autoplot(y.AR2) + geom_hline(yintercept = 33)
+```
+
+
+```{r}
+auto.arima(y.AR2) # automáticamente busca un modelo con media distinta de cero (incluye constante)
+```
+
+
+```{r}
+modelo2 = Arima(y.AR2, order = c(1,0,0)); coef(modelo2);summary(modelo2)
+```
+
+
+```{r}
+modelo2 = Arima(y.AR2, order = c(1,0,0),include.constant = TRUE); coef(modelo2);summary(modelo2)
+```
+
+
+```{r}
+modelo2 = Arima(y.AR2, order = c(1,0,0),include.mean = TRUE); coef(modelo2);summary(modelo2)
+```
+
+
+```{r}
+modelo2 = Arima(y.AR2, order = c(1,0,0),include.constant = FALSE); coef(modelo2);summary(modelo2)
+```
+
+
+```{r}
+modelo2 = Arima(y.AR2, order = c(1,0,0),include.mean = FALSE); coef(modelo2);summary(modelo2)
+```
+
+# Modelo MA(2) 
+
+
+$$Y_t = \epsilon_t - 0.95\epsilon_{t-1}+0.62\epsilon_{t-2}\qquad\qquad\epsilon_t\sim N(0,1)$$
+```{r, message = FALSE}
+# --------------------------- #
+# Simulación del modelo MA(2) #
+# --------------------------- #
+
+set.seed(9532)
+
+theta1 = -0.95
+theta2 = 0.62
+sigma  = sqrt(1)
+
+Y.MA2 = 10 + arima.sim(model=list(ma=c(theta1,theta2)), n=80, sd = sigma)   # MA(2) con theta1 = 0.95 y theta2 = -0.62
+autoplot(Y.MA2) + 
+  geom_hline(yintercept = 10)
+```
+
+
+```{r, message = FALSE}
+# -------------------------- #
+# Pruebas de estacionariedad #
+# -------------------------- #
+
+library(tseries)
+kpss.test(Y.MA2)
+```
+
+
+```{r, message = FALSE}
+adf.test(Y.MA2, k = 0)
+```
+
+
+```{r, message = FALSE}
+adf.test(Y.MA2, k = 1)
+```
+
+
+```{r, message = FALSE}
+trunc((length(Y.MA2)-1)^(1/3))
+```
+
+
+```{r, message = FALSE}
+adf.test(Y.MA2, k = 4)
+```
+
+
+```{r, message = FALSE}
+summary(ur.df(Y.MA2, type = c("none")))
+```
+
+
+```{r, message = FALSE}
+pp.test(Y.MA2,type = c("Z(t_alpha)"))
+PP.test(Y.MA2)
+```
+
+
+```{r, message = FALSE}
+pp = ur.pp(Y.MA2, type="Z-tau", model = c("constant")) 
+pp
+pp@teststat
+pp@cval
+
+```
+
+La media teórica es 10, mientras que la muestral:
+
+```{r}
+mean(Y.MA2)
+```
+
+Varianza
+
+```{r}
+(1+theta1^2+theta2^2)*sigma^2 # teórica
+var(Y.MA2) # muestral
+```
+
+Función de autocovarianza
+
+```{r}
+TSA::acf(Y.MA2, type="covariance", lag = 10, plot = FALSE)
+TSA::acf(Y.MA2, type="covariance", lag = 100, plot = TRUE, main = "Función de autocovarianza")
+```
+
+La función de autocorrelación se trunca luego de los dos primeros desfases (aunque vemos que este truncamiento "no es perfecto")
+
+```{r}
+TSA::acf(Y.MA2, type="correlation", lag = 10, plot = FALSE)
+TSA::acf(Y.MA2, type="correlation", lag = 100, plot = TRUE, main = "Función de autocorrelación")
+```
+
+La función de autocorrelación parcial teórica se extingue. Así también la muestral:
+
+```{r}
+TSA::acf(Y.MA2, type="partial", lag = 10, plot = FALSE)
+TSA::acf(Y.MA2, type="partial", lag = 100, plot = TRUE, main = "Función de autocorrelación parcial")
+```
+
+¿Qué modelo sugiere R?
+
+```{r, message=FALSE}
+library(forecast)
+auto.arima(Y.MA2)
+```
+
+Modelando un MA(2)
+
+```{r}
+modelo1 = Arima(Y.MA2, order = c(0,0,2)); coef(modelo1); summary(modelo1)
+```
+
+
+```{r}
+modelo2 = Arima(Y.MA2, order = c(1,0,2)); coef(modelo2); summary(modelo2)
+```
+
+
+```{r}
+modelo3 = Arima(Y.MA2, order = c(4,0,0)); coef(modelo3); summary(modelo3)
+```
+
+Diagnóstico
+
+```{r}
+# Residuales
+res1 = residuals(modelo1)
+res2 = residuals(modelo2)
+res3 = residuals(modelo3)
+
+# Media cero
+t.test(res1)
+t.test(res2)
+t.test(res3)
+```
+
+
+```{r}
+# Normalidad
+shapiro.test(res1)
+shapiro.test(res2)
+shapiro.test(res3)
+```
+
+
+```{r}
+# Independencia
+autoplot(TSA::acf(res1, lag = 25, plot = FALSE)) + 
+  labs(title = "Residuales del modelo 1")
+```
+
+
+```{r}
+autoplot(TSA::acf(res2, lag = 25, plot = FALSE))+ 
+  labs(title = "Residuales del modelo 2")
+```
+
+
+```{r}
+autoplot(TSA::acf(res3, lag = 25, plot = FALSE))+ 
+  labs(title = "Residuales del modelo 3")
+```
+
+
+```{r}
+# Medidas de precisión
+accuracy(forecast(modelo1))
+accuracy(forecast(modelo2))
+accuracy(forecast(modelo3))
+```
+
+
+```{r}
+# Significancia
+modelo1$coef/sqrt(diag(modelo1$var.coef))
+modelo2$coef/sqrt(diag(modelo2$var.coef))
+modelo3$coef/sqrt(diag(modelo3$var.coef))
+
+```
+
+Predicción
+
+```{r}
+forecast(modelo3, h = 5)
+```
+
+
+```{r}
+autoplot(forecast(modelo3, h = 5))
+```
+

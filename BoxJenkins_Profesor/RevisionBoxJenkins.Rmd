@@ -1,0 +1,208 @@
+---
+title: "Argumento Funcion Arima"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## SERIE ESTACIONARIA COM MEDIA CERO
+```{r, warning=TRUE, message=FALSE}
+
+library(ggfortify) # para usar autoplot
+set.seed(444)
+#sigma <- 0.5
+y1 <- arima.sim(model=list(ar=c(0.8,-0.4)), n=150 ) #, sd = sigma)
+autoplot(y1)
+
+```
+
+```{r}
+ts.sim <- arima.sim(list(order = c(2,0,0), ar=c(0.8,-0.4)), n = 150)
+ts.plot(ts.sim)
+
+```
+
+```{r pressure, warning=FALSE, message=FALSE}
+library(fpp2)
+Arima(y1, order = c(2,0,0), include.constant = TRUE)$coef
+```
+```{r}
+Arima(y1, order = c(2,0,0), include.constant = FALSE)$coef
+```
+```{r}
+Arima(y1, order = c(2,0,0), include.mean = TRUE)$coef
+```
+
+```{r}
+Arima(y1, order = c(2,0,0), include.mean = FALSE)$coef
+```
+
+```{r}
+Arima(y1, order = c(2,0,0), include.drift = TRUE)$coef
+```
+
+```{r}
+Arima(y1, order = c(2,0,0), include.drift = FALSE)$coef
+```
+
+## SERIE ESTACIONARIA COM MEDIA DISTINTA DE CERO
+```{r}
+set.seed(445)
+y2 = 10 + arima.sim(model=list(ar=c(0.8,-0.4)), n=150 ) # , sd = sigma)
+autoplot(y2)
+```
+
+```{r }
+Arima(y2, order = c(2,0,0), include.constant = TRUE)$coef
+```
+
+```{r}
+Arima(y2, order = c(2,0,0), include.constant = FALSE)$coef
+```
+
+```{r}
+Arima(y2, order = c(2,0,0), include.mean = TRUE)$coef
+```
+
+```{r}
+Arima(y2, order = c(2,0,0), include.mean = FALSE)$coef
+```
+
+```{r}
+Arima(y2, order = c(2,0,0), include.drift = TRUE)$coef
+```
+
+```{r}
+Arima(y2, order = c(2,0,0), include.drift = FALSE)$coef
+```
+
+## SERIE CON TENDENCIA ESTACIONARIA
+
+```{r}
+set.seed(222)
+#y3 <- 10 + arima.sim(model=list(ar=c(0.8,-0.4)), n=150, sd = sigma) + 1:150
+y3 <- 10 + arima.sim(model=list(ar=c(0.8,-0.4)), n=150, sd = 1) + 1:150
+autoplot(y3)
+```
+```{r }
+Arima(y3, order = c(2,0,0), include.constant = TRUE)$coef
+#Arima(y3, order = c(2L,0L,0L), include.constant = TRUE)$coef
+```
+
+```{r}
+Arima(y3, order = c(2,0,0), include.constant = FALSE)$coef
+```
+
+```{r}
+Arima(y3, order = c(2,0,0), include.mean = TRUE)$coef
+```
+
+```{r}
+Arima(y3, order = c(2,0,0), include.mean = FALSE)$coef
+```
+
+```{r}
+Arima(y3, order = c(2,0,0), include.drift = TRUE)$coef
+```
+
+```{r}
+Arima(y3, order = c(2,0,0), include.drift = FALSE)$coef
+```
+
+
+
+## SERIE NO ESTACIONARIA
+```{r}
+set.seed(321)
+y4 = arima.sim(model=list(order = c(2,1,0), ar=c(0.8,-0.4)), n=150 ) #, sd = sigma)
+autoplot(y4)
+
+```
+```{r }
+Arima(y4, order = c(2,1,0), include.constant = TRUE)$coef
+```
+
+```{r}
+Arima(y4, order = c(2,1,0), include.constant = FALSE)$coef
+```
+
+```{r}
+Arima(y4, order = c(2,1,0), include.mean = TRUE)$coef
+```
+
+```{r}
+Arima(y4, order = c(2,1,0), include.mean = FALSE)$coef
+```
+
+```{r}
+Arima(y4, order = c(2,1,0), include.drift = TRUE)$coef
+```
+
+```{r}
+Arima(y4, order = c(2,1,0), include.drift = FALSE)$coef
+```
+
+## SERIE NO ESTACIONARIA COM MEDIA DISTINTA DE CERO
+
+```{r}
+set.seed(502)
+y5 = 15 + arima.sim(model=list(order = c(2,1,0), ar=c(0.8,-0.4)), n= 150 ) #, sd = sigma)
+autoplot(y5)
+```
+```{r }
+Arima(y5, order = c(2,1,0), include.constant = TRUE)$coef
+```
+
+```{r}
+Arima(y5, order = c(2,1,0), include.constant = FALSE)$coef
+```
+
+```{r}
+Arima(y5, order = c(2,1,0), include.mean = TRUE)$coef
+```
+
+```{r}
+Arima(y5, order = c(2,1,0), include.mean = FALSE)$coef
+```
+
+```{r}
+Arima(y5, order = c(2,1,0), include.drift = TRUE)$coef
+```
+
+```{r}
+Arima(y5, order = c(2,1,0), include.drift = FALSE)$coef
+```
+
+## SERIE NO ESTACIONARIA COM MEDIA DISTINTA DE CERO
+
+```{r}
+set.seed(3214)
+y6 = 15 + arima.sim(model=list(order = c(2,2,0), ar=c(0.8,-0.4)), n= 150)#, sd = sigma)
+autoplot(y6)
+```
+
+```{r }
+Arima(y6, order = c(2,2,0), include.constant = TRUE)$coef
+```
+
+```{r}
+Arima(y6, order = c(2,2,0), include.constant = FALSE)$coef
+```
+
+```{r}
+Arima(y6, order = c(2,2,0), include.mean = TRUE)$coef
+```
+
+```{r}
+Arima(y6, order = c(2,2,0), include.mean = FALSE)$coef
+```
+
+```{r}
+Arima(y6, order = c(2,2,0), include.drift = TRUE)$coef
+```
+
+```{r}
+Arima(y6, order = c(2,2,0), include.drift = FALSE)$coef
+```
