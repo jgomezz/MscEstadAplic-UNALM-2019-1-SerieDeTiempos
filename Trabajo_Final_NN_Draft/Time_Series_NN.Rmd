@@ -1,0 +1,693 @@
+---
+title: "Time Series and Neural Networks"
+author: "E. Figueroa, J. Gómez, R. León"
+date: "27 de junio de 2019"
+output: html_document
+---
+ 
+## Preparando el entorno y la información para el análisis.
+
+Cargamos los paquetes para el análisis.
+
+```{r message=FALSE}
+# Paquetes para el análisis
+
+library(TSA)
+library(ggfortify)
+library(Kendall)
+library(randtests)
+library(pracma)
+library(forecast)
+library(trend)
+library(DescTools)
+library(lubridate)
+
+
+```
+
+Utilizaremos para nuestro ejemplo a analizar Apple, el titan tecnológico que en el 2019 es la empresa con mayor capitalización bursátil del mundo. 
+
+Revisaremos las cotizaciones diarias de Apple, cuyo ticker en el NYSE es AAPL, utilizaremos el precio ajustado que es el que incorpora los cambios corporativos como entrega de dividendos, splits, etc.
+
+El periodo a analizar es de enero 2000 a junio 2019.
+
+```{r}
+df_stock <- read.csv("aapl_2000_01_to_2019_06.csv", header = T, stringsAsFactors = F)
+
+df_stock$date <- as.Date(df_stock$date)
+
+str(df_stock)
+
+head(df_stock)
+
+frecuencia_st <- round(mean(table(year ( df_stock$date[year(df_stock$date) <= 2018] ))))
+frecuencia_st
+st <- ts( df_stock['adjusted'], 
+          freq = frecuencia_st, 
+          start = c(2000,1,3) )
+
+stock_name <- "AAPL"
+
+```
+
+### Análisis Exploratorio de datos
+
+#### Revisión de Tendencia
+
+Aplicaremos los siguientes medios:
+
+* Inspección gráfica de la serie
+* Revisión gráfica de la autocorrelación
+* Prueba de hipótesis de Cox-Stuart
+* Prueba Rho de Spearman
+
+
+##### Inspección Gráfica
+
+```{r}
+
+autoplot(st) + 
+  labs(title = paste("Cotizaciones diarias", stock_name),
+       x     = "tiempo",
+       y     = "Cotización en USD") + 
+  theme_minimal()
+  
+```
+
+**Conclusión**
+
+
+Se aprecia que existe tendencias por tramos, la primera descendente de 2015 - 2016, luego ascendente desde mediados del 2016 hasta mediados del 2018 y descendente hasta finales de ese año. Finalmente, ascendente hasta abril de 2019 y luego descendente.
+
+
+
+
+En una perspectiva general se puede decir que la tendencia es aproximadamente creciente.
+##### Revisión de autocorrelación
+
+```{r}
+
+autoplot(TSA::acf(st, type = "correlation", lag = 1200, plot = FALSE)) +
+    labs(title = paste("Autocorrelación diaria para la acción", stock_name),
+       x     = "lag",
+       y     = "correlación")
+
+```
+
+**Conclusión**
+Se aprecia que existe fuerte autocorrelación pero por tramos tal como se había sospechado en el análisis gráfico.
+
+
+##### Prueba de Cox-Stuar
+
+
+```{r}
+alpha_test <- 0.05
+test_cox_diferente <- cox.stuart.test(st)
+
+test_cox_creciente <- cox.stuart.test(st, alternative = c("right.sided"))
+
+test_cox_decreciente <- cox.stuart.test(st, alternative = c("left.sided"))
+
+if (test_cox_diferente$p.value < alpha_test) {
+  print( paste('Se rechaza H0', 'existe evidencia de tendencia')) } else{
+  print( 'No se rechaza H0, no hay evidencia de tendencia')
+}
+
+if (test_cox_creciente$p.value < alpha_test) {
+  print( paste('Se rechaza H0', 'existe evidencia de tendencia creciente')) } else{
+  print( 'No se rechaza H0, no hay evidencia de tendencia creciente')
+  }
+
+if (test_cox_decreciente$p.value < alpha_test) {
+  print( paste('Se rechaza H0', 'existe evidencia de tendencia decreciente')) } else{
+  print( 'No se rechaza H0, no hay evidencia de tendencia decreciente')
+  }
+```
+  }
+
+**Conclusión**
+
+Existe evidencias para suponer tendencia creciente
+
+##### Prueba Rho de Spearman
+
+```{r message=FALSE}
+
+test_spearman <- cor.test(st, time(st), method = "spearman")
+
+if (test_spearman$p.value < alpha_test) {
+  print( paste('Se rechaza H0', 'por lo que existe evidencia de autocorrelación'))
+  print( paste('La correlación es ', test_spearman$estimate,
+               'por lo que existe evidencia de',
+               ifelse(test_spearman$estimate < 0, 
+                      'tendencia decreciente',
+                      'tendencia creciente') ))
+  } else{
+  print( 'No se rechaza H0, no hay evidencia de autocorrelación')
+  }
+
+
+```
+
+#### Revisión de Estacionalidad
+
+##### Correlograma
+
+```{r}
+
+autoplot(TSA::acf(st, type = "correlation", lag = 1200, plot = FALSE)) +
+    labs(title = paste("Autocorrelación diaria para la acción", stock_name),
+       x     = "lag",
+       y     = "correlación")
+
+```
+
+
+** Conclusión **
+No se evidencia la presencia de estacionalidad desde el punto de vista gráfico.
+
+##### Gráfico de Cajas
+
+```{r}
+
+seasonplot(st, s=12 )
+
+
+boxplot(df_stock$adjusted ~ month(df_stock$date), col = "lightblue")
+monthplot(st)
+
+
+```
+
+Se observa que no existe estacionalidad, y la dispersión es grande.
+
+**Conclusión**
+##### Prueba de kruskal Wallis
+
+```{r}
+
+test_kruskal <- kruskal.test(st ~ cycle(st))
+if (test_kruskal$p.value < alpha_test) {
+  print( paste('Se rechaza H0', 'existe evidencia de estacionalidad')) } else{
+
+  print( 'No se rechaza H0, no hay evidencia de estacionalidad')
+  }
+
+
+```
+### Revisión de modelo de Regresión Lineal
+
+Modelo: Y ~ alpha + Beta1 * t + mes
+
+```{r}
+
+Y <- st # Asignamos valores del data frame
+mes <- as.factor(month(df_stock$date))
+
+t <- time(st) # asignamos variable tiempo de la serie
+mod.reg <- lm( Y ~ t + mes)
+
+summary(mod.reg)
+
+par(mfrow = c(2,2))
+
+plot(mod.reg)
+
+par(mfrow = c(1,1))
+
+```
+
+
+**Conclusión**
+
+* El modelo de regresión general es muy significativo
+* Según el modelo el mes 12 resulta no significativo, sin embargo, dado el esquema de tiempo no podemos retirarlo, se debe entender que el mes de diciembre no aporta información para el modelo. El mes de Enero no forma parte del modelo.
+* Se sospecha que no se cumple la normalidad en el gr?fico de cuantiles, especialmente en los extremos.
+* El RMSE = `r RMSE(mod.reg)` ser? utilizado como indicador para compararlo con otros modelos.
+
+* El $R^2$ = 0.7475 es bueno (superior a 0.70)
+#### Predicción
+
+Conforme la informaci?n disponible se tiene que el ?tlimo dato de la serie corresponde al 23 de Mayo de 2019 con valor de t=2019.394, el valor de la cotización del 24 de Mayo de 2019 fue: 178.97
+
+Pronosticaremos el valor con base a la informaci?n disponible:
+
+t = 2019.394 + 1/251.25
+mes = 5
+
+```{r}
+t_actual <- max(time(st)) + 1/251.25
+
+data_predict = data.frame(t= t_actual,
+                          mes=5  )
+
+data_predict$mes = as.factor(data_predict$mes)
+
+# predict con intervalo de confianza del 95%
+predict(mod.reg, newdata = data_predict, interval=c("confidence"), level = 0.95)
+
+
+
+```
+
+El valor de la acción para el 24 de mayo 2019 de AAPL fue: 178.97
+
+[Cotización 24 May 2019](https://www.marketwatch.com/investing/stock/aapl)
+
+
+*** Graficando los valores observados y pronosticados**
+
+```{r}
+
+data_predict <- data.frame( t = time(st),
+                            mes = month(df_stock$date))
+
+data_predict$mes = as.factor(data_predict$mes)
+
+# predict 
+y_estimado <- predict(mod.reg, newdata = data_predict)
+
+
+mmov <- ma(st, order = 10, centre = FALSE) # semanal
+
+st_y_estimado <- ts( y_estimado, freq = frecuencia_st, start = c(2000,1,3) )
+
+autoplot(cbind(st, st_y_estimado, mmov) , facets = FALSE) +
+  labs(title = paste("Cotizaci?n de ", stock_name),
+       x     = "tiempo",
+       y     = "Precio")+
+  theme(legend.position="bottom") +
+  scale_colour_manual(labels = c("Real", "Reg. Lineal", "Media Movil 10"), 
+                      values = c("steelblue2", "red", "green")) + 
+  theme_minimal()
+
+
+```
+
+
+### Selección del mejor modelo de suavización exponencial
+
+
+
+Carga de librerias
+```{r}
+library(fpp2)
+library(tseries)
+library(urca)
+```
+
+Definición de constantes
+```{r}
+THRESHOLD <- 0.7
+LOW       <- 0
+HIGH      <- 1
+```
+
+
+**Holt Winters : Aditivo**
+
+```{r message=FALSE}
+mod.HWA = HoltWinters(st, alpha = NULL, beta = NULL, gamma = NULL, seasonal = c("additive"))
+
+sprintf('[ alpha = %f ][ beta = %f][ gamma = %f ] ',mod.HWA$alpha, mod.HWA$beta, mod.HWA$gamma)
+
+if (mod.HWA$alpha == HIGH) {
+  print('El nivel estimado del módelo depende del último valor')
+} else if (mod.HWA$alpha == LOW){
+  print('El nivel estimado del módelo solo depende de los valores historicos')
+} else if (mod.HWA$alpha > THRESHOLD){
+  print('El nivel estimado del módelo depende mayormente de los últimos valores, es cambiante')
+} else {
+  print('El nivel estimado del módelo depende mayormente de los valores historicos, se mantien constante∫')
+}
+
+if (mod.HWA$beta == HIGH) {
+  print('La pendiente del del módelo depende del último valor')
+} else if (mod.HWA$beta == LOW){
+  print('La pendiente del módelo solo depende de los valores historicos')
+} else if (mod.HWA$beta > THRESHOLD){
+  print('La pendiente del módelo depende mayormente de los últimos valores, es cambiante')
+} else {
+  print('La pendiente del módelo depende mayormente de los valores historicos, se mantiene constante')
+}
+
+if (mod.HWA$gamma == HIGH) {
+  print('La estacionalidad del módelo depende del último valor')
+} else if (mod.HWA$gamma == LOW){
+  print('La estacionalidad del módelo solo depende de los valores historicos')
+} else if (mod.HWA$gamma > THRESHOLD){
+  print('La estacionalidad del módelo depende mayormente de los últimos valores, es cambiante ')
+} else {
+  print('La estacionalidad del módelo depende mayormente de los valores historicos, se mantiene constante')
+}
+
+```
+
+**Diagnóstico de los residuales**
+
+```{r message=FALSE}
+resid = residuals(mod.HWA)
+autoplot(resid)
+```
+El residual no es un ruido blanco, se puede observar que tiene forma de embudo que aumenta progresivamente. 
+
+**Correlograma**
+```{r}
+acf(resid, lag = 6*48)
+
+```
+Se observa que hay varias autocorrelaciones significativas, no se encuentra ningun patrón en particular.
+
+```{r}
+mean(resid)
+t.test(resid)
+```
+Como el p-valor es cercano a 0 , entonces el valor de la media tiende a 0
+
+```{r}
+qplot(resid, 
+      geom = "histogram", 
+      bins = round(1 + 3.3*log10(length(resid))),
+      fill = I("darkblue"))
+```
+El histograma de los residuales es asimetrico
+
+```{r}
+shapiro.test(resid)
+```
+El valor de p-value es demasiado pequeño por lo tanto no existe normalidad
+
+**Holt Winters : Multiplicativo**
+
+```{r message=FALSE}
+mod.HWM = HoltWinters(st, alpha = NULL, beta = NULL, gamma = NULL, seasonal = c("multiplicative"))
+
+sprintf('[ alpha = %f ][ beta = %f][ gamma = %f ] ',mod.HWM$alpha, mod.HWM$beta, mod.HWM$gamma)
+
+if (mod.HWM$alpha == HIGH) {
+  print('El nivel estimado del módelo depende del último valor')
+} else if (mod.HWM$alpha == LOW){
+  print('El nivel estimado del módelo solo depende de los valores historicos')
+} else if (mod.HWM$alpha > THRESHOLD){
+  print('El nivel estimado del módelo depende mayormente de los últimos valores, es cambiante')
+} else {
+  print('El nivel estimado del módelo depende mayormente de los valores historicos, se mantien constante∫')
+}
+
+if (mod.HWM$beta == HIGH) {
+  print('La pendiente del del módelo depende del último valor')
+} else if (mod.HWM$beta == LOW){
+  print('La pendiente del módelo solo depende de los valores historicos')
+} else if (mod.HWM$beta > THRESHOLD){
+  print('La pendiente del módelo depende mayormente de los últimos valores, es cambiante')
+} else {
+  print('La pendiente del módelo depende mayormente de los valores historicos, se mantiene constante')
+}
+
+if (mod.HWM$gamma == HIGH) {
+  print('La estacionalidad del módelo depende del último valor')
+} else if (mod.HWM$gamma == LOW){
+  print('La estacionalidad del módelo solo depende de los valores historicos')
+} else if (mod.HWM$gamma > THRESHOLD){
+  print('La estacionalidad del módelo depende mayormente de los últimos valores, es cambiante ')
+} else {
+  print('La estacionalidad del módelo depende mayormente de los valores historicos, se mantiene constante')
+}
+```
+
+**Diagnóstico de los residuales**
+
+```{r message=FALSE}
+resid = residuals(mod.HWM)
+autoplot(resid)
+```
+El residual no es un ruido blanco, se puede observar que existe un estacionalidad cada año con una amplitud que comienza a aumentar progresivamente. 
+
+**Correlograma**
+```{r}
+acf(resid, lag = 6*48)
+```
+Se observa que existe estacionalidad de las autocorrelaciones, pero también se observa que son significativas.
+
+```{r}
+mean(resid)
+t.test(resid)
+```
+Como el p-valor es cercano a 0 , entonces el valor de la media tiende a 0
+
+```{r}
+qplot(resid, 
+      geom = "histogram", 
+      bins = round(1 + 3.3*log10(length(resid))),
+      fill = I("darkblue"))
+```
+Se observa una asimetria en los residuales.
+
+```{r}
+shapiro.test(resid)
+```
+El valor de p-value es demasiado pequeño por lo tanto no existe normalidad
+
+**Cross Validation**
+
+Se realiza validación cruzada con tamaño de entrenamiento de 36 meses y prueba de 3 meses.
+
+```{r}
+FREQ <- frecuencia_st
+#FREQ
+
+n    = length(st)  # longitud de la serie
+k    = 2*FREQ      # longitud mínima de la data de entrenamiento (k<n)
+ho   = 0.25*FREQ    # longitud de la data de prueba (ho<k<n)
+mae1 = mae2 = matrix(NA,n-k-ho,ho)
+st_tmp   = tsp(st)[1]  # inicio de la serie
+
+# Valor ideal
+CYCLES <- n-k-ho
+
+# Se asigna un valor fijo porque no converge 
+# la prueba de Cross Validation. Limite 12 
+CYCLES <- 12  # Colapsa a partir de 13
+
+for(i in 1:CYCLES){
+  train   = window(st, end   = st_tmp + k/FREQ + (i-2)/FREQ)
+  test    = window(st, start = st_tmp + k/FREQ + (i-1)/FREQ, end = st_tmp + k/FREQ + (i-1)/FREQ + (ho-1)/FREQ)
+  modelo  = HoltWinters(train, alpha = NULL, beta  = NULL, gamma = NULL, seasonal = c("additive"))
+  predi   = forecast(modelo,h = ho)
+  mae1[i,1:length(test)] = abs(ts(predi$mean)-ts(test))                  
+  modelo2 = HoltWinters(train
+                        , alpha = NULL, beta  = FALSE, gamma = NULL, seasonal = c("multiplicative")) 
+  predi2  = forecast(modelo2,h = ho)                                     
+  mae2[i,1:length(test)] = abs(ts(predi2$mean)-ts(test))
+}
+```
+
+Se observa que solo se puede hacer las cross validation hasta el ciclo 12, para un valor mayor colapsa el cálculo en R.
+
+**Mostrando resultado del Cross Validation**
+
+```{r}
+
+plot(1:ho, 
+     colMeans(mae1,na.rm=TRUE), 
+     type = "l", 
+     col  = "red", 
+     xlab = "horizonte", 
+     ylab = "MAE",
+     ylim = c(0,1.25))
+lines(1:ho, 
+      colMeans(mae2,na.rm=TRUE), 
+      type = "l",
+      col  = "darkblue")
+legend("topright",
+       legend = c("HW Aditivo","HW Multiplicativo"),
+       col    = c("red","darkblue"),
+       lty    = 1)
+```
+De acuerdo al MAE se opta por usar el modelo Holt Winters Aditivo
+
+**Graficando valores estimados vs observados**
+
+```{r}
+# Predicción
+forecast(mod.HWA, h = 0.5*FREQ)
+```
+
+```{r}
+autoplot(forecast(mod.HWA, h = 0.5*FREQ))
+```
+
+**Conclusión**
+
+Con Holt Winters los residuales no presentan un comportamiento de ruido blanco, pero entre el modelo multiplicativo y aditivo, siguiendo el principio de Parsimonia, se elige el módelo Holt Winters Aditivo.
+
+### ARIMA
+
+
+**Pruebas de estacionariedad**
+```{r}
+forecast::ggtsdisplay(st,lag = 1200)
+```
+
+```{r}
+boxplot(st ~ cycle(st), col="gold")
+```
+**Pruebas de estacionariedad**
+```{r}
+kpss.test(euretail)$p.value
+```
+```{r}
+adf.test(euretail)$p.value
+```
+
+```{r}
+pp.test(euretail)$p.value
+```
+Todas las prubas de hiportesis indican que la serie de tiempo es no estacionaria.
+
+*Diferenciamos una vez para buscar estacionarizarla*
+```{r echo=TRUE}
+tseries::kpss.test(diff(st))$p.value
+```
+No se rechaza la hipotesis Ho de estacionariedad de la serie.
+
+```{r }
+tseries::adf.test(diff(st))$p.value 
+```
+Se rechaza la Ho de raiz unitaria, de modo que se acepta la estacionariedad de la serie.
+
+```{r }
+urca::ur.df(diff(st))@teststat
+```
+Estadistico tau, Abs(-50.59224) es mayor que cuantil 3, de modo que se acepta la de estacionariedad de la serie.
+
+```{r }
+tseries::pp.test(diff(st))$p.value 
+```
+El pvalue menor que 0.01 implica aceptar la estacionariedad de la serie.
+
+```{r }
+urca::ur.pp(diff(st))@teststat
+```
+
+El estadistico arroja -4876.846, lo que significa que se acepta la  estacionariedad de la serie.
+
+Con una diferenciacion hemos estacionarizado la serie. Veamos los correlogramas, con una diferenciación e incorporando la estacionalidad.
+
+```{r}
+forecast::ggtsdisplay(diff(st), lag=90)
+```
+No se puede observar un patrón en el ACF y PACF, se procede a usar  auto.arima, con una diferenciación .
+```{r}
+#forecast::auto.arima(y = st,d = 1)
+#auto.arima(y = st,d = 1)
+#auto.arima(y = st)
+```
+No Converge
+
+**Modelamiento ARIMA**
+
+```{r}
+#mod.ARIMA = Arima(y = st, order = c(0,1,1), seasonal = c(0,1,1))
+#summary(mod.ARIMA)
+```
+
+**Diagnostico ARIMA**
+
+```{r}
+#res.ARIMA = residuals(mod.ARIMA)
+#ggtsdisplay(res.ARIMA)
+
+```
+
+
+```{r}
+#shapiro.test(res.ARIMA)$p.value
+```
+
+
+```{r}
+#accuracy(forecast(mod.ARIMA))
+
+```
+
+**Predicción**
+```{r}
+#forecast(mod.ARIMA, h = 0.5*FREQ)
+```
+
+```{r}
+#autoplot(forecast(mod.ARIMA, h = 0.5*FREQ))
+```
+
+### Neural Network
+
+
+
+```{r message=FALSE}
+
+library(keras)
+library(astsa)
+
+
+head(st)
+
+# revisando retornos
+
+##st_return <- diff(log(st))
+
+##plot(st_return)
+
+##acf2(st_return)
+
+##auto.arima(st_return)
+
+```
+
+```{r}
+
+## sarima(st_return, p = 1, d = 0, q = 0)
+
+```
+
+```{r}
+
+
+# preparing data
+
+# st_window: number of lags to construct matrix x to 
+st_window <- 3
+
+# x <- matrix( NA , nrow = length(st) - st_window, ncol = st_window  )
+# 
+# for i in (1:st_windo){
+#   
+#   
+# }
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# model <- keras_model_sequential() %>%
+# layer_embedding(input_dim = max_features, output_dim = 32) %>%
+# layer_lstm(units = 32) %>%
+# layer_dense(units = 1, activation = "sigmoid")
+# model %>% compile(
+# optimizer = "rmsprop",
+# loss = "binary_crossentropy",
+# metrics = c("acc")
+# )
+# history <- model %>% fit(
+# input_train, y_train,
+# epochs = 10,
+# batch_size = 128,
+# validation_split = 0.2
+# )
+
+```
+
+
