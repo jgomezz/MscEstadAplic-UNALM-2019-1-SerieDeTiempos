@@ -1,12 +1,12 @@
 
-# Índice trimestral de comercio minorista en la zona del euro (17 países), 1996-2011, 
-# que abarca el comercio mayorista y minorista, y la reparación de vehículos de motor y
-# motocicletas. (Índice: 2005 = 100).
+# ?ndice trimestral de comercio minorista en la zona del euro (17 pa?ses), 1996-2011, 
+# que abarca el comercio mayorista y minorista, y la reparaci?n de veh?culos de motor y
+# motocicletas. (?ndice: 2005 = 100).
 # Fuente: Eurostat. https://data.is/IdKyZr
 library(fpp2)
 
 # ============== #
-# Identificación #
+# Identificaci?n #
 # ============== #
 
 ggtsdisplay(euretail,lag = 32)
@@ -15,30 +15,33 @@ adf.test(euretail)$p.value # > 0.99 # no estacionario
 ur.df(euretail)@teststat # 0.9775485< 3 # no estacionario
 pp.test(euretail)$p.value # > 0.99 # no estacionario
 ur.pp(euretail)@teststat # -2.909147< 3 # no estacionario
-# observamos las gráficas ACF, domina la tendencia
+# observamos las gr?ficas ACF, domina la tendencia
 
 ggtsdisplay(diff(euretail),lag = 32)
 kpss.test(diff(euretail))$p.value # 0.01234317 # no estacionario
 adf.test(diff(euretail))$p.value # 0.3058271 # no estacionario
 ur.df(diff(euretail))@teststat # |-4.561445| > 3 # estacionario
 pp.test(diff(euretail))$p.value # < 0.01 # estacionario
-ur.pp(diff(euretail))@teststat # |-43.4743| < 3 #  estacionario
 # para algunas pruebas, d = 1. Sin embargo para otras, observamos 
-# las gráficas ACF, PACF. domina la estacionalidad
+ur.pp(diff(euretail))@teststat # |-43.4743| < 3 #  estacionario
+# las gr?ficas ACF, PACF. domina la estacionalidad
 # cuando d = 1, se tiene que p y q toman valores distintos de cero, 
 # mientras que P = 2 y Q = 0
 auto.arima(euretail, d = 1, D = 0) # p = P = 2, q = Q = 0
+# ARIMA(2,1,0)(2,0,0)[4] 
 
 ggtsdisplay(diff(diff(euretail),lag=4),lag = 32)
 kpss.test(diff(diff(euretail),lag=4))$p.value # > 0.1 # estacionario
-adf.test(diff(diff(euretail),lag=4))$p.value # 0.01 # estacionario
+adf.test(diff(diff(euretail),lag=4))$p.value # < 0.01 # estacionario
 ur.df(diff(diff(euretail),lag=4))@teststat # |-3.753256| > 3 # estacionario
 pp.test(diff(diff(euretail),lag=4))$p.value # < 0.01 estacionario
 ur.pp(diff(diff(euretail),lag=4))@teststat # |-47.27217| < 3 #  estacionario
 # finalmente conseguimos estacionariedad con d = 1 y D = 1
 auto.arima(euretail, d = 1, D = 1) # p = P = 0, q = 3, Q = 1
+#ARIMA(0,1,3)(0,1,1)[4] 
 
 auto.arima(euretail) # p = 0, d = 1, q = 3, P = 0, D = 1, Q = 1
+#ARIMA(0,1,3)(0,1,1)[4] 
 
 # ============ #
 # Modelamiento #
@@ -54,7 +57,7 @@ mod3 = Arima(euretail, order = c(1,1,0), seasonal = c(2,0,0))
 summary(mod3)
 
 # =========== #
-# Diagnóstico #
+# Diagn?stico #
 # =========== #
 
 res1 = residuals(mod1)
@@ -78,7 +81,7 @@ accuracy(forecast(mod2))
 accuracy(forecast(mod3))
 
 n    = length(euretail)  # longitud de la serie
-k    = 28                # longitud mínima de la data de entrenamiento (k<n)
+k    = 28                # longitud m?nima de la data de entrenamiento (k<n)
 ho   = 4                 # longitud de la data de prueba (ho<k<n)
 mse1 = mse2 = mse3 = matrix(NA,n-k-ho,ho)
 st   = tsp(euretail)[1]  # inicio de la serie
@@ -128,7 +131,7 @@ legend("topleft",
 
 
 # ========== #
-# Predicción #
+# Predicci?n #
 # ========== #
 
 forecast(mod2, h = 4)

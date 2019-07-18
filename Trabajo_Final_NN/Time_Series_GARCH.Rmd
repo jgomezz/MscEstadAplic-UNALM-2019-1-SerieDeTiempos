@@ -1,0 +1,194 @@
+---
+title: "Time Series and Neural Networks"
+author: "E. Figueroa, J. Gómez, R. León"
+date: "27 de junio de 2019"
+output: html_document
+---
+
+## Preparando el entorno y la información para el análisis.
+
+Cargamos los paquetes para el análisis.
+
+```{r message=FALSE}
+# Paquetes para el análisis
+
+library(TSA)
+library(ggfortify)
+library(forecast)
+library(DescTools)
+library(lubridate)
+
+```
+
+#### Carga de datos
+
+```{r}
+df_stock <- read.csv("aapl_2000_01_to_2019_06.csv", header = T, stringsAsFactors = F)
+
+df_stock$date <- as.Date(df_stock$date)
+
+frecuencia_st <- round(mean(table(year ( df_stock$date[year(df_stock$date) <= 2018] ) ) ))
+
+st <- ts( df_stock['adjusted'],           freq = frecuencia_st,           start = c(2000,1,3) )
+```
+
+#### Conversion a serie de tiempo de retornos del activo
+
+```{r}
+
+R1 = timeSeries::returns(x = st, method = "discrete")[-1]
+qplot(R1, geom = "histogram", fill = I("darkblue"), bins = 1+3.3*log10(length(R1)))
+
+autoplot(ts(R1, freq = 4, start = c(2000,1)), ylab = "US$", main = "Retornos")
+
+R2 = timeSeries::returns(st, method = "continuous")[-1]
+autoplot(ts(R2, freq = 4, start = c(2000,1)), ylab = "US$", main = "Retornos")
+
+qplot(R2, geom = "histogram", fill = I("darkblue"), bins = 1+3.3*log10(length(R2)))
+
+```
+Tanto R1 como R2 muestran aglomeracion de variaciones, por ejemplo, al inicio de la serie y en la parte central.
+
+Trabajaremos con R2, los residuos al cuadrado.
+
+Exploraremos algunas propiedades de la volatilidad.
+
+```{r message=FALSE}
+library(e1071)
+kurtosis(R2)
+```
+
+La serie es claramente leptocurtica.
+
+```{r}
+shapiro.test(R2)
+```
+
+Los retornos al cuadrado muestran no normalidad.
+
+```{r message=FALSE}
+library(fractal)
+stationarity(R2)
+```
+
+Las tres resultados anteriores parecen indicar que hay varianza condicional
+
+Veamos que nos dice el posible modelamiento con ARIMA
+
+```{r}
+library(forecast)
+(modelo.arima = auto.arima(R2))
+```
+
+Lo anterior sugiere usar ARMA(3,3)
+
+```{r}
+res.arima    = residuals(modelo.arima)
+
+t.test(res.arima)
+```
+
+Residuales tienen media cero.
+
+```{r}
+shapiro.test(res.arima)
+```
+
+Residuales no siguen una distribucion normal.
+
+```{r}
+ggtsdisplay(res.arima)
+```
+
+Hay autocorrelacion de residuales. No ruido blanco.
+
+
+```{r}
+ggtsdisplay(res.arima^2)
+
+```
+ACF y PACF sugieren autocorrelacion de residuos al cuadrado con un desfase.
+
+Probemos GARCH(1)
+
+```{r message=FALSE}
+library(fGarch)
+
+(mod.arch1 = garchFit(~arma(3, 3) + garch(1, 0), 
+                      data  = R2, 
+                      trace = FALSE))
+```
+
+Los parametros de ARMA y de GARCH son altamente significativos.
+
+Probemos con el modelo alternativo GARCH(1,1).
+```{r}
+
+(mod.garch11 = garchFit(~arma(3, 3) + garch(1, 1), 
+                      data  = R2, 
+                      trace = FALSE))
+```
+
+Tambien mustra parametros muy altamente significativos.
+
+### Diagnostico GARCH
+
+```{r}
+res1  = mod.arch1@residuals/mod.arch1@sigma.t
+res11 = mod.garch11@residuals/mod.garch11@sigma.t
+```
+
+##### Media cero de residuales
+
+```{r}
+t.test(res1)$p.value
+t.test(res11)$p.value
+
+```
+ARCH(1) es OK
+
+##### Normalidad de residuales
+
+```{r}
+shapiro.test(res1)$p.value
+shapiro.test(res11)$p.value
+
+```
+
+No hay normalidad en residuales de los dos modelos
+
+##### Resumen
+
+```{r}
+summary(mod.arch1)
+```
+```{r}
+summary(mod.garch11)
+```
+
+Ya que GARCH(1,0) tiene menor AIC, podemos escoger este modelo...
+
+```{r}
+ggtsdisplay(res1)
+```
+```{r}
+ggtsdisplay(res11)
+```
+
+... aunque GARCH(1,1) muestra mejor comportamiento de autocorrelacion de residuos
+
+##### Pronóstico
+
+Realizamos el pronostico con el mejor modelo: GARCH(1,0)
+
+```{r}
+autoplot(ts(mod.arch1@sigma.t))
+```
+```{r}
+autoplot(ts(mod.garch11@sigma.t))
+```
+
+```{r}
+predict(mod.arch1, n.ahead = 2)
+```
+

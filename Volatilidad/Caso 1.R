@@ -3,6 +3,7 @@
 # Depósitos en el sistema financiero por departamentos - fin de periodo (millones S/) - Cusco (moneda nacional)
 
 # Lectura de datos
+
 datos = ts(read.table("datos.txt",T),freq = 4, start = c(1980,1))
 
 # Análisis exploratorio
